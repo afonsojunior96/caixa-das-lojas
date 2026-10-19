@@ -125,8 +125,9 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
   <div class="panel">
     <div class="lg-topo"><img src="logo-faixa.jpg" alt="Movimento Fashion" class="logo-login" width="640" height="327"><small class="muted">Caixa das Lojas · controle financeiro</small></div>
     <form class="form" id="lgEntrar">
-      <label class="f" for="lgEmail">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label>
-      <label class="f" for="lgSenha">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label>
+      <label class="f" for="lgEmail">E-mail<input id="lgEmail" type="email" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
+      <label class="f" for="lgSenha">Senha<input id="lgSenha" type="password" autocomplete="off" required></label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:.85rem"><input type="checkbox" id="lgVer" style="width:auto;min-height:0"> Mostrar senha</label>
       <button class="pri" type="submit">Entrar</button>
       <button class="link" type="button" id="lgEsqueci">Esqueci a senha</button>
     </form>
@@ -285,13 +286,14 @@ function mostrarLogin(modo){
 function msgLogin(t, ok){ const m=document.getElementById("lgMsg"); m.textContent=t; m.className = ok ? "lg-msg ok" : "lg-msg"; }
 document.getElementById("lgEntrar").addEventListener("submit", async e=>{
   e.preventDefault();
-  const email=document.getElementById("lgEmail").value.trim(), senha=document.getElementById("lgSenha").value;
+  const email=document.getElementById("lgEmail").value.trim().toLowerCase(), senha=document.getElementById("lgSenha").value.trim();
   if(!email || !senha){ msgLogin("Digite e-mail e senha."); return; }
   const b=e.submitter; if(b) b.disabled=true; msgLogin("Entrando…", true);
   const {error} = await sb.auth.signInWithPassword({email, password: senha});
   if(b) b.disabled=false;
-  if(error) msgLogin(/invalid/i.test(error.message) ? "E-mail ou senha incorretos." : "Não consegui entrar: "+error.message);
+  if(error) msgLogin(/invalid/i.test(error.message) ? "E-mail ou senha incorretos para "+email+". Confira se o navegador não preencheu outro e-mail ou senha." : "Não consegui entrar: "+error.message);
 });
+document.getElementById("lgVer").addEventListener("change",e=>{ document.getElementById("lgSenha").type = e.target.checked ? "text" : "password"; });
 document.getElementById("lgEsqueci").addEventListener("click", async ()=>{
   const email=document.getElementById("lgEmail").value.trim();
   if(!email){ msgLogin("Digite seu e-mail acima e toque de novo em \"Esqueci a senha\"."); return; }
