@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Caixa das Lojas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -101,18 +102,45 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
 .actions{display:flex;gap:4px;justify-content:flex-end;white-space:nowrap}
 .hint{font-size:.8rem;color:var(--muted)}
 @media (max-width:520px){.bar{grid-template-columns:84px 1fr auto}.seg button{min-width:0;flex:1}.seg{display:flex}}
+.login{min-height:100%;display:grid;place-items:center;padding-block:48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.login .panel{width:100%;max-width:380px;gap:16px;padding:24px}
+.login h1{font-size:1.5rem}
+.lg-msg{min-height:1.2em;font-size:.88rem;color:var(--bad)}
+.lg-msg.ok{color:var(--muted)}
+.link{background:none;border:0;color:var(--accent);padding:0;min-height:0;text-decoration:underline;font-weight:500}
+.quem{display:flex;gap:8px;align-items:center;font-size:.8rem;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 </head>
 <body>
+<section class="login" id="login" hidden>
+  <div class="panel">
+    <div><h1>Caixa das Lojas</h1><small class="muted">Movimento Fashion</small></div>
+    <form class="form" id="lgEntrar">
+      <label class="f" for="lgEmail">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label>
+      <label class="f" for="lgSenha">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label>
+      <button class="pri" type="submit">Entrar</button>
+      <button class="link" type="button" id="lgEsqueci">Esqueci a senha</button>
+    </form>
+    <form class="form" id="lgNova" hidden>
+      <p>Crie sua senha nova.</p>
+      <label class="f" for="lgNova1">Senha nova (mínimo 8 caracteres)<input id="lgNova1" type="password" autocomplete="new-password"></label>
+      <label class="f" for="lgNova2">Repita a senha<input id="lgNova2" type="password" autocomplete="new-password"></label>
+      <button class="pri" type="submit">Salvar senha e entrar</button>
+    </form>
+    <p class="lg-msg" id="lgMsg" role="status"></p>
+  </div>
+</section>
+<div id="app" hidden>
 <div class="wrap">
   <header class="top">
     <div class="brand">
       <h1>Caixa das Lojas</h1>
-      <small id="sub">Vendas, despesas e caixa de cada loja · os dados ficam salvos neste aparelho</small>
+      <small id="sub">Vendas, despesas e caixa de cada loja</small>
     </div>
     <div class="filters">
+      <div class="quem"><span id="quem"></span><button type="button" class="ghost" id="sair">Sair</button></div>
       <label class="f" for="mes">Mês
         <input type="month" id="mes">
       </label>
@@ -132,6 +160,7 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
   </nav>
 
   <main id="view"></main>
+</div>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -169,67 +198,126 @@ const taxaDe = l => l.tipo==="venda" ? Math.round(l.valor*(S.taxas[l.forma]||0)*
 let toastT;
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
 
-/* ---------- armazenamento: neste aparelho (localStorage) ---------- */
-const CHAVE = "caixaDasLojas.v1";
-const SEED = {lojas:{},lancamentos:{},caixa:{},config:{}};
-let mem = {lojas:{}, lancamentos:{}, caixa:{}, config:{}};
-let salvarOk = true;
-function carregar(){
-  try{
-    const raw = localStorage.getItem(CHAVE);
-    if(raw){ const d=JSON.parse(raw); mem={lojas:{},lancamentos:{},caixa:{},config:{},...d}; return true; }
-  }catch(e){ salvarOk=false; }
-  return false;
+/* ---------- armazenamento: Supabase (login obrigatório) ---------- */
+const SB_URL = "https://hblovjnnjdkjxlmvwcqb.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhibG92am5uamRranhsbXZ3Y3FiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MjIwNzgsImV4cCI6MjEwMjk5ODA3OH0.CZ_hfwndUf7CeqtyIEx7f8ZHpDx9C6nzH6eK_d1_A94"; // chave pública (anon); quem protege os dados é a RLS das tabelas mf_
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+const TAB = {lojas:"mf_lojas", lancamentos:"mf_lancamentos", caixa:"mf_caixa", config:"mf_config"};
+let mem = {lancamentos:{}};
+
+function paraLinha(col, d){
+  if(col==="lancamentos"){ const {desc, ...r} = d; return {...r, descricao: desc || ""}; }
+  if(col==="lojas"){ const {nome, fundo, ativa, ordem} = d; return {nome, fundo, ativa: ativa!==false, ordem: ordem??0}; }
+  if(col==="caixa"){ const {loja, data, sangria, contado, atualizado} = d; return {loja, data, sangria: sangria||0, contado: contado??null, atualizado}; }
+  return d;
 }
-function gravar(){
-  try{ localStorage.setItem(CHAVE, JSON.stringify(mem)); salvarOk=true; }
-  catch(e){ salvarOk=false; throw e; }
-}
+function deLanc(r){ const {descricao, ...x} = r; return {...x, desc: descricao || "", valor: +r.valor}; }
+function falhou(error){ if(error){ const e = new Error(error.message); e.code = error.code; throw e; } }
+
 const store = {
-  async add(col,data){ const id=Date.now().toString(36)+Math.random().toString(36).slice(2,7); mem[col][id]=data; gravar(); memSync(); return id; },
-  async set(col,id,data){ mem[col][id]=data; gravar(); memSync(); },
-  async del(col,id){ delete mem[col][id]; gravar(); memSync(); }
+  async add(col, data){ const {data:r, error} = await sb.from(TAB[col]).insert(paraLinha(col, data)).select("id").single(); falhou(error); await carregar(); return r.id; },
+  async set(col, id, data){ const {error} = await sb.from(TAB[col]).upsert({id, ...paraLinha(col, data)}); falhou(error); await carregar(); },
+  async del(col, id){ const {error} = await sb.from(TAB[col]).delete().eq("id", id); falhou(error); await carregar(); }
 };
-function rows(obj){ return Object.entries(obj).map(([id,d])=>({id,...d})); }
-function memSync(){
-  S.lojas = rows(mem.lojas).sort((a,b)=>(a.ordem??0)-(b.ordem??0));
-  if(S.loja!=="todas" && !S.lojas.some(l=>l.id===S.loja)) S.loja="todas";
-  S.taxas = {...TAXAS_PADRAO, ...((mem.config.geral||{}).taxas||{})};
+
+/* o Supabase devolve no máximo 1000 linhas por consulta: busca em páginas */
+async function todas(montar){
+  const out = []; let de = 0;
+  for(;;){ const {data, error} = await montar().range(de, de+999); falhou(error); out.push(...data); if(data.length < 1000) return out; de += 1000; }
+}
+
+let carregando = 0;
+async function carregar(){
+  const meu = ++carregando;
   const ini=S.mes+"-01", fim=mesFim(S.mes), h0=addMes(S.mes,-5)+"-01";
-  const all = rows(mem.lancamentos);
-  S.lanc = all.filter(l=>l.data>=ini&&l.data<=fim);
-  S.hist = all.filter(l=>l.data>=h0&&l.data<=fim);
-  S.caixa = rows(mem.caixa).filter(c=>c.data>=addMes(S.mes,-1)+"-01"&&c.data<=fim);
-  render();
+  try{
+    const [lojas, cfg, lanc, cx] = await Promise.all([
+      todas(()=>sb.from(TAB.lojas).select("*").order("ordem")),
+      sb.from(TAB.config).select("*").eq("id","geral").maybeSingle(),
+      todas(()=>sb.from(TAB.lancamentos).select("*").gte("data",h0).lte("data",fim).order("data")),
+      todas(()=>sb.from(TAB.caixa).select("*").gte("data",addMes(S.mes,-1)+"-01").lte("data",fim))
+    ]);
+    if(meu !== carregando) return;
+    falhou(cfg.error);
+    S.lojas = lojas.map(l=>({...l, fundo:+l.fundo}));
+    if(S.loja!=="todas" && !S.lojas.some(l=>l.id===S.loja)) S.loja="todas";
+    S.taxas = {...TAXAS_PADRAO, ...((cfg.data||{}).taxas||{})};
+    S.hist = lanc.map(deLanc);
+    S.lanc = S.hist.filter(l=>l.data>=ini);
+    mem.lancamentos = Object.fromEntries(S.hist.map(l=>[l.id,l]));
+    S.caixa = cx.map(c=>({...c, sangria:+c.sangria, contado: c.contado==null?null:+c.contado}));
+    S.ready = true;
+    if(!S.lojas.length) showBanner("Seu login entrou, mas não tem acesso aos dados da loja. Peça para incluírem seu usuário.");
+    render();
+  }catch(e){
+    if(meu !== carregando) return;
+    S.ready = true; render();
+    showBanner("Não consegui buscar os dados. Confira a internet e recarregue a página.");
+  }
 }
 async function writeGuard(fn){
   try{ await fn(); return true; }
   catch(e){
-    toast("Não salvou: o navegador bloqueou o armazenamento. Saia da janela anônima ou libere os dados do site.");
+    if(e && (e.code==="42501" || /row-level security/i.test(e.message||""))) toast("Seu usuário não tem permissão para gravar.");
+    else toast("Não salvou. Confira a internet e tente de novo.");
     return false;
   }
 }
-function subscribeMes(){ memSync(); }
+function subscribeMes(){ S.ready=false; render(); carregar(); }
 function showBanner(t){ const b=document.getElementById("banner"); b.textContent=t; b.hidden=false; }
 
-function exportar(){
-  const blob=new Blob([JSON.stringify({app:"caixa-das-lojas",versao:1,gerado:new Date().toISOString(),dados:mem},null,1)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="backup-caixa-das-lojas-"+hoje+".json";
-  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
-  try{ localStorage.setItem(CHAVE+".ultimoBackup", hoje); }catch(e){}
-  toast("Backup baixado"); render();
+/* ---------- login ---------- */
+const telaLogin = document.getElementById("login"), app = document.getElementById("app");
+function mostrarLogin(modo){
+  app.hidden = true; telaLogin.hidden = false;
+  document.getElementById("lgEntrar").hidden = modo==="nova";
+  document.getElementById("lgNova").hidden = modo!=="nova";
+  document.getElementById("lgMsg").textContent = "";
 }
-function ultimoBackup(){ try{ return localStorage.getItem(CHAVE+".ultimoBackup"); }catch(e){ return null; } }
+function msgLogin(t, ok){ const m=document.getElementById("lgMsg"); m.textContent=t; m.className = ok ? "lg-msg ok" : "lg-msg"; }
+document.getElementById("lgEntrar").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const email=document.getElementById("lgEmail").value.trim(), senha=document.getElementById("lgSenha").value;
+  if(!email || !senha){ msgLogin("Digite e-mail e senha."); return; }
+  const b=e.submitter; if(b) b.disabled=true; msgLogin("Entrando…", true);
+  const {error} = await sb.auth.signInWithPassword({email, password: senha});
+  if(b) b.disabled=false;
+  if(error) msgLogin(/invalid/i.test(error.message) ? "E-mail ou senha incorretos." : "Não consegui entrar: "+error.message);
+});
+document.getElementById("lgEsqueci").addEventListener("click", async ()=>{
+  const email=document.getElementById("lgEmail").value.trim();
+  if(!email){ msgLogin("Digite seu e-mail acima e toque de novo em \"Esqueci a senha\"."); return; }
+  const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+  msgLogin(error ? "Não consegui enviar: "+error.message : "Se o e-mail estiver cadastrado, chega um link para criar uma senha nova.", !error);
+});
+document.getElementById("lgNova").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const s1=document.getElementById("lgNova1").value, s2=document.getElementById("lgNova2").value;
+  if(s1.length < 8){ msgLogin("A senha precisa ter pelo menos 8 caracteres."); return; }
+  if(s1 !== s2){ msgLogin("As duas senhas não são iguais."); return; }
+  const {error} = await sb.auth.updateUser({password: s1});
+  if(error){ msgLogin("Não consegui trocar a senha: "+error.message); return; }
+  history.replaceState(null, "", location.pathname);
+  entrouNoApp();
+});
+document.getElementById("sair").addEventListener("click", async ()=>{ await sb.auth.signOut(); });
 
-async function init(){
+let noApp = false, recuperando = false;
+function entrouNoApp(){
+  if(noApp) return; noApp = true;
+  telaLogin.hidden = true; app.hidden = false;
+  sb.auth.getUser().then(({data})=>{ const u=data&&data.user; document.getElementById("quem").textContent = u ? u.email : ""; });
   document.getElementById("mes").value=S.mes;
-  S.mode="local"; S.ready=true;
-  if(!carregar()){
-    mem = JSON.parse(JSON.stringify(SEED));
-    try{ gravar(); }catch(e){}
-  }
-  if(!salvarOk) showBanner("Este navegador não está deixando salvar (janela anônima ou dados bloqueados). O que você lançar agora some ao fechar.");
-  memSync();
+  S.ready=false; render(); carregar();
+}
+async function init(){
+  sb.auth.onAuthStateChange((evento, sessao)=>{
+    if(evento==="PASSWORD_RECOVERY"){ recuperando = true; mostrarLogin("nova"); return; }
+    if(evento==="SIGNED_OUT"){ noApp=false; S.lojas=[]; S.lanc=[]; S.hist=[]; S.caixa=[]; mostrarLogin("entrar"); return; }
+    if(sessao && !recuperando) entrouNoApp();
+  });
+  const {data} = await sb.auth.getSession();
+  if(!data.session && !recuperando) mostrarLogin("entrar");
 }
 
 /* ---------- cálculos ---------- */
@@ -510,23 +598,6 @@ function vLojas(){
       <div class="row">${FORMAS.map(f=>`<label class="f" for="tx-${slug(f)}">${f} (%)<input id="tx-${slug(f)}" inputmode="decimal" value="${String(Math.round((S.taxas[f]||0)*10000)/100).replace(".",",")}"></label>`).join("")}</div>
       <div><button class="pri" type="submit" ${S.canWrite?"":"disabled"}>Salvar taxas</button></div>
     </form>
-    ${vBackup()}
-  </div>`;
-}
-
-function vBackup(){
-  const ub=ultimoBackup(), n=Object.keys(mem.lancamentos).length;
-  const pend=S.importPend;
-  return `<div class="panel form">
-    <h2>Backup</h2>
-    <p class="hint">Os lançamentos ficam guardados só neste navegador, neste aparelho. Baixe um backup toda semana e guarde no Drive, no e-mail ou no WhatsApp. Se trocar de celular ou limpar o navegador, é com ele que você recupera tudo.</p>
-    <p>${n} lançamentos guardados · último backup: <b>${ub?dBR(ub)+"/"+ub.slice(0,4):"nunca"}</b></p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="pri" type="button" data-act="exportar">Baixar backup</button>
-      <label class="f" for="impFile" style="display:inline-grid"><span class="hint">Restaurar de um arquivo de backup</span><input type="file" id="impFile" accept=".json,application/json"></label>
-    </div>
-    ${pend?`<div class="banner">Restaurar o backup de ${esc(pend.quando)} com ${pend.n} lançamentos? Isso <b>substitui</b> tudo o que está neste aparelho.
-      <div style="display:flex;gap:8px;margin-top:8px"><button class="danger" type="button" data-act="confirmaImp">Substituir pelos dados do backup</button><button type="button" data-act="cancelaImp">Cancelar</button></div></div>`:""}
   </div>`;
 }
 
@@ -547,11 +618,6 @@ view.addEventListener("click",async e=>{
     S.form={tipo:l.tipo,id:l.id,data:l.data,loja:l.loja,valor:String(l.valor).replace(".",","),desc:l.desc||"",forma:l.forma||"Pix",canal:l.canal||"Loja",cat:l.cat||"Outros",origem:l.origem||"Conta"};
     S.tab="lancar"; render(); }
   else if(a==="cancelEdit"){ S.form.id=null; S.form.valor=""; S.form.desc=""; render(); }
-  else if(a==="exportar"){ exportar(); }
-  else if(a==="cancelaImp"){ S.importPend=null; render(); }
-  else if(a==="confirmaImp"){ const d=S.importPend&&S.importPend.dados; S.importPend=null; if(!d) return;
-    const antes=mem; mem={lojas:{},lancamentos:{},caixa:{},config:{},...d};
-    if(await writeGuard(async()=>gravar())){ memSync(); toast("Backup restaurado"); } else { mem=antes; } }
   else if(a==="cxDia"){ S.caixaDia=b.dataset.d; render(); }
   else if(a==="editLoja"){ S.editLoja=id; render(); }
   else if(a==="cancelLoja"){ S.editLoja=null; render(); }
@@ -567,10 +633,6 @@ view.addEventListener("input",e=>{
 view.addEventListener("change",e=>{
   if(e.target.id==="fTipo"){ S.filtroTipo=e.target.value; render(); }
   if(e.target.id==="cxDia"){ S.caixaDia=e.target.value; render(); }
-  if(e.target.id==="impFile"){ const f=e.target.files&&e.target.files[0]; if(!f) return;
-    f.text().then(t=>{ let j; try{ j=JSON.parse(t); }catch(err){ toast("Esse arquivo não é um backup do Caixa das Lojas."); return; }
-      const d=j&&j.dados; if(!d||typeof d.lojas!=="object"||typeof d.lancamentos!=="object"){ toast("Esse arquivo não é um backup do Caixa das Lojas."); return; }
-      S.importPend={dados:d,n:Object.keys(d.lancamentos).length,quando:j.gerado?dBR(j.gerado.slice(0,10))+"/"+j.gerado.slice(0,4):"data desconhecida"}; render(); }); }
 });
 view.addEventListener("submit",async e=>{
   if(e.target.id==="fLoja2"){ e.preventDefault();
