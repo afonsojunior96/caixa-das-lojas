@@ -5,16 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Caixa das Lojas</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: barra de lojas no topo, abas de trabalho, conteúdo em grade que vira uma coluna no celular */
 :root{
-  --bg:#f6f4f7; --surface:#ffffff; --surface-2:#efebf1; --line:#ddd6e1;
-  --fg:#1f1724; --muted:#6c6173; --accent:#8e2c5a; --accent-fg:#ffffff; --accent-soft:#f3e3eb;
+  --bg:#fbf5f8; --surface:#ffffff; --surface-2:#efebf1; --line:#ddd6e1;
+  --fg:#1f1724; --muted:#6c6173; --accent:#c2185b; --accent-fg:#ffffff; --accent-soft:#fce4ef;
   --good:#1f7a4d; --good-soft:#e1f2e8; --bad:#b3261e; --bad-soft:#fbe4e2; --warn:#9a6200; --warn-soft:#fcefd6;
-  --s1:#8e2c5a; --s2:#2f6f8f; --s3:#b0752a; --s4:#4f7a3a; --s5:#6a4fa3;
+  --s1:#c2185b; --s2:#2f6f8f; --s3:#b0752a; --s4:#4f7a3a; --s5:#6a4fa3;
   --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
@@ -22,14 +24,14 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#151017; --surface:#1e1821; --surface-2:#271f2b; --line:#3a2f3f;
-  --fg:#f1eaf3; --muted:#a898ae; --accent:#e07aa6; --accent-fg:#1b0f15; --accent-soft:#3a2130;
+  --fg:#f1eaf3; --muted:#a898ae; --accent:#ff6fae; --accent-fg:#1b0f15; --accent-soft:#3a2130;
   --good:#5fca8e; --good-soft:#173326; --bad:#ff8a80; --bad-soft:#3a1c1a; --warn:#f0b75a; --warn-soft:#3a2c12;
-  --s1:#e07aa6; --s2:#6fb3d6; --s3:#e0a75e; --s4:#8fc172; --s5:#a993e0; color-scheme:dark}}
+  --s1:#ff6fae; --s2:#6fb3d6; --s3:#e0a75e; --s4:#8fc172; --s5:#a993e0; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#151017; --surface:#1e1821; --surface-2:#271f2b; --line:#3a2f3f;
-  --fg:#f1eaf3; --muted:#a898ae; --accent:#e07aa6; --accent-fg:#1b0f15; --accent-soft:#3a2130;
+  --fg:#f1eaf3; --muted:#a898ae; --accent:#ff6fae; --accent-fg:#1b0f15; --accent-soft:#3a2130;
   --good:#5fca8e; --good-soft:#173326; --bad:#ff8a80; --bad-soft:#3a1c1a; --warn:#f0b75a; --warn-soft:#3a2c12;
-  --s1:#e07aa6; --s2:#6fb3d6; --s3:#e0a75e; --s4:#8fc172; --s5:#a993e0; color-scheme:dark}
+  --s1:#ff6fae; --s2:#6fb3d6; --s3:#e0a75e; --s4:#8fc172; --s5:#a993e0; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45}
 .wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
@@ -103,6 +105,11 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
 .hint{font-size:.8rem;color:var(--muted)}
 @media (max-width:520px){.bar{grid-template-columns:84px 1fr auto}.seg button{min-width:0;flex:1}.seg{display:flex}}
 .login{min-height:100%;display:grid;place-items:center;padding-block:48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{display:flex;gap:14px;align-items:center}
+.logo-topo{height:64px;width:auto;border-radius:10px;flex:none}
+.lg-topo{display:grid;gap:8px;justify-items:center;text-align:center}
+.logo-login{width:100%;max-width:300px;height:auto;border-radius:12px}
+@media (max-width:520px){.logo-topo{height:48px}}
 .login .panel{width:100%;max-width:380px;gap:16px;padding:24px}
 .login h1{font-size:1.5rem}
 .lg-msg{min-height:1.2em;font-size:.88rem;color:var(--bad)}
@@ -116,7 +123,7 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
 <body>
 <section class="login" id="login" hidden>
   <div class="panel">
-    <div><h1>Caixa das Lojas</h1><small class="muted">Movimento Fashion</small></div>
+    <div class="lg-topo"><img src="logo-faixa.jpg" alt="Movimento Fashion" class="logo-login" width="640" height="327"><small class="muted">Caixa das Lojas · controle financeiro</small></div>
     <form class="form" id="lgEntrar">
       <label class="f" for="lgEmail">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label>
       <label class="f" for="lgSenha">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label>
@@ -136,8 +143,9 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:10px}
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Caixa das Lojas</h1>
-      <small id="sub">Vendas, despesas e caixa de cada loja</small>
+      <img src="logo-faixa.jpg" alt="Movimento Fashion" class="logo-topo" width="640" height="327">
+      <div><h1>Caixa das Lojas</h1>
+      <small id="sub">Vendas, despesas e caixa de cada loja</small></div>
     </div>
     <div class="filters">
       <div class="quem"><span id="quem"></span><button type="button" class="ghost" id="sair">Sair</button></div>
